@@ -1,78 +1,134 @@
 package com.example.vlessvpn
 
-import android.app.Application
+import android.app.Activity
+import android.content.Intent
+import android.net.VpnService
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 
-class MainViewModel(app: Application) : AndroidViewModel(app) {
-    private val storage = Storage(app)
+class MainActivity : ComponentActivity() {
+    private val vm: MainViewModel by viewModels()
 
-    var profiles by mutableStateOf(storage.profiles()); private set
-    var selected by mutableIntStateOf(storage.selected); private set
-    var subUrl by mutableStateOf(storage.subUrl); private set
-    var message by mutableStateOf<String?>(null)
-    var loading by mutableStateOf(false); private set
-
-    /** Принимает ссылку подписки (http...) либо одну/несколько ссылок vless:// vmess:// trojan://. */
-    fun add(input: String) {
-        val text = input.trim()
-        if (text.isEmpty()) return
-        if (text.startsWith("http://") || text.startsWith("https://")) {
-            subUrl = text
-            storage.subUrl = text
-            refresh()
-            return
+    private val vpnPermission =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            if (it.resultCode == Activity.RESULT_OK) startVpn()
         }
-        val parsed = LinkParser.parseMany(text)
-        if (parsed.isEmpty()) {
-            message = "Не удалось распознать ссылку"
-            return
-        }
-        updateProfiles(profiles + parsed)
-        message = "Добавлено серверов: ${parsed.size}"
+
+    private fun connect() {
+        val intent = VpnService.prepare(this)
+        if (intent != null) vpnPermission.launch(intent) else startVpn()
     }
 
-    fun refresh() {
-        if (subUrl.isBlank()) return
-        viewModelScope.launch {
-            loading = true
-            try {
-                val list = withContext(Dispatchers.IO) { Subscription.fetch(subUrl) }
-                if (list.isEmpty()) {
-                    message = "В подписке нет поддерживаемых серверов"
-                } else {
-                    updateProfiles(list)
-                    select(0)
-                    message = "Загружено серверов: ${list.size}"
+    private fun startVpn() {
+        startService(Intent(this, XrayVpnService::class.java).setAction(XrayVpnService.ACTION_START))
+    }
+
+    private fun stopVpn() {
+        startService(Intent(this, XrayVpnService::class.java).setAction(XrayVpnService.ACTION_STOP))
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
+                Surface(Modifier.fillMaxSize()) {
+                    Screen(vm, onConnect = ::connect, onDisconnect = ::stopVpn)
                 }
-            } catch (e: Exception) {
-                message = "Ошибка загрузки: ${e.message}"
-            } finally {
-                loading = false
             }
         }
     }
+}
 
-    fun select(i: Int) {
-        selected = i
-        storage.selected = i
-    }
+@Composable
+private fun Screen(vm: MainViewModel, onConnect: () -> Unit, onDisconnect: () -> Unit) {
+    val status by VpnState.status.collectAsState()
+    val error by VpnState.error.collectAsState()
+    var input by remember { mutableStateOf("") }
 
-    fun delete(i: Int) {
-        val list = profiles.toMutableList().also { it.removeAt(i) }
-        updateProfiles(list)
-        select(selected.coerceIn(0, (list.size - 1).coerceAtLeast(0)))
-    }
+    Column(
+        Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("VlessVPN", style = MaterialTheme.typography.headlineMedium)
 
-    private fun updateProfiles(list: List<Profile>) {
-        profiles = list
-        storage.saveProfiles(list)
+        val statusText = when (status) {
+            VpnStatus.DISCONNECTED -> "Отключено"
+            VpnStatus.CONNECTING -> "Подключение…"
+            VpnStatus.CONNECTED -> "Подключено"
+            VpnStatus.ERROR -> "Ошибка: ${error ?: "неизвестная"}"
+        }
+        Text(statusText, style = MaterialTheme.typography.titleMedium)
+
+        val active = status == VpnStatus.CONNECTED || status == VpnStatus.CONNECTING
+        Button(
+            onClick = { if (active) onDisconnect() else onConnect() },
+            enabled = active || vm.profiles.isNotEmpty(),
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text(if (active) "Отключиться" else "Подключиться") }
+
+        OutlinedTextField(
+            value = input,
+            onValueChange = { input = it },
+            label = { Text("Ссылка подписки или vless:// vmess:// trojan://") },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { vm.add(input); input = "" }) { Text("Добавить") }
+            OutlinedButton(onClick = { vm.refresh() }, enabled = vm.subUrl.isNotBlank() && !vm.loading) {
+                Text(if (vm.loading) "Загрузка…" else "Обновить подписку")
+            }
+        }
+        vm.message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+
+        LazyColumn(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            itemsIndexed(vm.profiles) { i, p ->
+                Row(
+                    Modifier.fillMaxWidth().clickable { vm.select(i) },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(selected = i == vm.selected, onClick = { vm.select(i) })
+                    Column(Modifier.weight(1f)) {
+                        Text(p.name, style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "${p.protocol} · ${p.address}:${p.port}",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    TextButton(onClick = { vm.delete(i) }) { Text("Удалить") }
+                }
+            }
+        }
     }
 }
