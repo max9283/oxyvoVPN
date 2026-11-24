@@ -2,41 +2,31 @@ package com.example.vlessvpn
 
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Color as AndroidColor
 import android.net.VpnService
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.Button
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 
 class MainActivity : ComponentActivity() {
     private val vm: MainViewModel by viewModels()
@@ -61,10 +51,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
+        )
         setContent {
-            MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
-                Surface(Modifier.fillMaxSize()) {
-                    Screen(vm, onConnect = ::connect, onDisconnect = ::stopVpn)
+            OxyvoTheme {
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    AppRoot(vm, onConnect = ::connect, onDisconnect = ::stopVpn)
                 }
             }
         }
@@ -72,63 +66,24 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun Screen(vm: MainViewModel, onConnect: () -> Unit, onDisconnect: () -> Unit) {
-    val status by VpnState.status.collectAsState()
-    val error by VpnState.error.collectAsState()
-    var input by remember { mutableStateOf("") }
+private fun AppRoot(vm: MainViewModel, onConnect: () -> Unit, onDisconnect: () -> Unit) {
+    var tab by rememberSaveable { mutableStateOf(0) }
+    val titles = listOf("Главная", "Серверы", "Б.С. / Ч.С.")
 
-    Column(
-        Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text("VlessVPN", style = MaterialTheme.typography.headlineMedium)
-
-        val statusText = when (status) {
-            VpnStatus.DISCONNECTED -> "Отключено"
-            VpnStatus.CONNECTING -> "Подключение…"
-            VpnStatus.CONNECTED -> "Подключено"
-            VpnStatus.ERROR -> "Ошибка: ${error ?: "неизвестная"}"
-        }
-        Text(statusText, style = MaterialTheme.typography.titleMedium)
-
-        val active = status == VpnStatus.CONNECTED || status == VpnStatus.CONNECTING
-        Button(
-            onClick = { if (active) onDisconnect() else onConnect() },
-            enabled = active || vm.profiles.isNotEmpty(),
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text(if (active) "Отключиться" else "Подключиться") }
-
-        OutlinedTextField(
-            value = input,
-            onValueChange = { input = it },
-            label = { Text("Ссылка подписки или vless:// vmess:// trojan://") },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { vm.add(input); input = "" }) { Text("Добавить") }
-            OutlinedButton(onClick = { vm.refresh() }, enabled = vm.subUrl.isNotBlank() && !vm.loading) {
-                Text(if (vm.loading) "Загрузка…" else "Обновить подписку")
+    Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+        TabRow(
+            selectedTabIndex = tab,
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.primary,
+        ) {
+            titles.forEachIndexed { i, title ->
+                Tab(selected = tab == i, onClick = { tab = i }, text = { Text(title) })
             }
         }
-        vm.message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-
-        LazyColumn(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            itemsIndexed(vm.profiles) { i, p ->
-                Row(
-                    Modifier.fillMaxWidth().clickable { vm.select(i) },
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RadioButton(selected = i == vm.selected, onClick = { vm.select(i) })
-                    Column(Modifier.weight(1f)) {
-                        Text(p.name, style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            "${p.protocol} · ${p.address}:${p.port}",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                    TextButton(onClick = { vm.delete(i) }) { Text("Удалить") }
-                }
-            }
+        when (tab) {
+            0 -> HomeScreen(vm, onConnect, onDisconnect)
+            1 -> ServersScreen(vm)
+            else -> SplitScreen(vm)
         }
     }
 }

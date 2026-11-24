@@ -29,9 +29,16 @@ class XrayVpnService : VpnService() {
 
     private fun startVpn() {
         if (core != null) return
-        val profile = Storage(this).selectedProfile()
+        val storage = Storage(this)
+        val profile = storage.selectedProfile()
         if (profile == null) {
             fail("Нет выбранного сервера")
+            return
+        }
+        val mode = storage.splitMode
+        val apps = storage.splitApps
+        if (mode == 1 && apps.isEmpty()) {
+            fail("Белый список пуст: выберите приложения на вкладке Б.С. / Ч.С.")
             return
         }
         VpnState.error.value = null
@@ -39,14 +46,33 @@ class XrayVpnService : VpnService() {
         Thread {
             try {
                 val builder = Builder()
-                    .setSession("VlessVPN")
+                    .setSession("Oxyvo VPN")
                     .setMtu(1500)
                     .addAddress("172.19.0.1", 30)
                     .addRoute("0.0.0.0", 0)
                     .addDnsServer("1.1.1.1")
                     .addDnsServer("8.8.8.8")
-                    // Само приложение (и ядро внутри него) идёт мимо туннеля — защита от петли.
-                    .addDisallowedApplication(packageName)
+
+                var allowed = 0
+                if (mode == 1) {
+                    // Белый список: через VPN идут только выбранные приложения
+                    apps.forEach {
+                        try { builder.addAllowedApplication(it); allowed++ } catch (_: Exception) {}
+                    }
+                }
+                if (mode == 1 && allowed > 0) {
+                    // само приложение не добавлено в allowed -> идёт мимо туннеля
+                } else {
+                    if (mode == 2) {
+                        // Чёрный список: выбранные приложения идут в обход VPN
+                        apps.forEach {
+                            try { builder.addDisallowedApplication(it) } catch (_: Exception) {}
+                        }
+                    }
+                    // Ядро внутри приложения должно идти мимо туннеля — защита от петли.
+                    builder.addDisallowedApplication(packageName)
+                }
+
                 val fd = builder.establish() ?: error("VPN-разрешение не выдано")
                 pfd = fd
                 val bridge = CoreBridge(this)

@@ -8,6 +8,9 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -16,18 +19,93 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     var profiles by mutableStateOf(storage.profiles()); private set
     var selected by mutableIntStateOf(storage.selected); private set
-    var subUrl by mutableStateOf(storage.subUrl); private set
+    var busy by mutableStateOf(false); private set
+    var progress by mutableStateOf<String?>(null); private set
     var message by mutableStateOf<String?>(null)
-    var loading by mutableStateOf(false); private set
+    var splitMode by mutableIntStateOf(storage.splitMode); private set
+    var splitApps by mutableStateOf(storage.splitApps); private set
+    var apps by mutableStateOf<List<AppInfo>>(emptyList()); private set
 
-    /** Принимает ссылку подписки (http...) либо одну/несколько ссылок vless:// vmess:// trojan://. */
+    init {
+        viewModelScope.launch {
+            apps = withContext(Dispatchers.IO) {
+                try { Apps.load(getApplication()) } catch (e: Exception) { emptyList() }
+            }
+        }
+        if (!storage.autoLoaded) autoSetup()
+    }
+
+    /** Загружает встроенные (и свои) списки, проверяет пингом и оставляет лучшие серверы. */
+    fun autoSetup() {
+        if (busy) return
+        viewModelScope.launch {
+            busy = true
+            try {
+                progress = "Загружаю списки серверов…"
+                val sources = Defaults.SOURCES + storage.customSubs
+                val fetched = withContext(Dispatchers.IO) {
+                    coroutineScope {
+                        sources.map { url ->
+                            async { runCatching { Subscription.fetch(url) }.getOrDefault(emptyList()) }
+                        }.awaitAll().flatten()
+                    }
+                }
+                val candidates = fetched.distinctBy { it.key() }.shuffled().take(Defaults.MAX_CANDIDATES)
+                if (candidates.isEmpty()) {
+                    message = "Не удалось загрузить списки. Проверьте интернет (GitHub может быть недоступен)."
+                    return@launch
+                }
+                progress = "Проверяю серверы…"
+                val checked = Pinger.pingAll(candidates) { d, t -> progress = "Проверка серверов: $d из $t" }
+                val best = checked.filter { it.ping >= 0 }
+                    .sortedBy { it.ping }
+                    .take(Defaults.KEEP)
+                    .map { it.copy(auto = true) }
+                if (best.isEmpty()) {
+                    message = "Ни один сервер не ответил. Попробуйте позже."
+                    return@launch
+                }
+                val manual = profiles.filter { !it.auto }
+                updateProfiles(manual + best)
+                select(manual.size)
+                storage.autoLoaded = true
+                message = "Найдено рабочих серверов: ${best.size}"
+            } catch (e: Exception) {
+                message = "Ошибка: ${e.message}"
+            } finally {
+                progress = null
+                busy = false
+            }
+        }
+    }
+
+    /** Повторная проверка пинга всех серверов с сортировкой. */
+    fun retest() {
+        if (busy || profiles.isEmpty()) return
+        viewModelScope.launch {
+            busy = true
+            try {
+                val current = profiles.getOrNull(selected)?.key()
+                val res = Pinger.pingAll(profiles) { d, t -> progress = "Проверка серверов: $d из $t" }
+                val sorted = res.sortedBy { if (it.ping < 0) Int.MAX_VALUE else it.ping }
+                updateProfiles(sorted)
+                select(sorted.indexOfFirst { it.key() == current }.coerceAtLeast(0))
+                message = "Рабочих серверов: ${sorted.count { it.ping >= 0 }} из ${sorted.size}"
+            } finally {
+                progress = null
+                busy = false
+            }
+        }
+    }
+
+    /** Ссылка подписки (http...) добавляется к списку источников, vless:// vmess:// trojan:// — как свой сервер. */
     fun add(input: String) {
         val text = input.trim()
         if (text.isEmpty()) return
         if (text.startsWith("http://") || text.startsWith("https://")) {
-            subUrl = text
-            storage.subUrl = text
-            refresh()
+            storage.customSubs = storage.customSubs + text
+            message = "Подписка добавлена"
+            autoSetup()
             return
         }
         val parsed = LinkParser.parseMany(text)
@@ -35,29 +113,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             message = "Не удалось распознать ссылку"
             return
         }
-        updateProfiles(profiles + parsed)
-        message = "Добавлено серверов: ${parsed.size}"
-    }
-
-    fun refresh() {
-        if (subUrl.isBlank()) return
-        viewModelScope.launch {
-            loading = true
-            try {
-                val list = withContext(Dispatchers.IO) { Subscription.fetch(subUrl) }
-                if (list.isEmpty()) {
-                    message = "В подписке нет поддерживаемых серверов"
-                } else {
-                    updateProfiles(list)
-                    select(0)
-                    message = "Загружено серверов: ${list.size}"
-                }
-            } catch (e: Exception) {
-                message = "Ошибка загрузки: ${e.message}"
-            } finally {
-                loading = false
-            }
-        }
+        val known = profiles.map { it.key() }.toSet()
+        val fresh = parsed.filter { it.key() !in known }
+        updateProfiles(fresh + profiles)
+        select(0)
+        message = "Добавлено серверов: ${fresh.size}"
     }
 
     fun select(i: Int) {
@@ -69,6 +129,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val list = profiles.toMutableList().also { it.removeAt(i) }
         updateProfiles(list)
         select(selected.coerceIn(0, (list.size - 1).coerceAtLeast(0)))
+    }
+
+    /** 0 = выкл, 1 = белый список, 2 = чёрный список. */
+    fun chooseMode(mode: Int) {
+        splitMode = mode
+        storage.splitMode = mode
+    }
+
+    fun toggleApp(pkg: String) {
+        val next = if (pkg in splitApps) splitApps - pkg else splitApps + pkg
+        splitApps = next
+        storage.splitApps = next
+    }
+
+    fun clearApps() {
+        splitApps = emptySet()
+        storage.splitApps = emptySet()
     }
 
     private fun updateProfiles(list: List<Profile>) {

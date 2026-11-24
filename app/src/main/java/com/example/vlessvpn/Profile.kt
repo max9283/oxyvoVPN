@@ -12,11 +12,16 @@ data class Profile(
     val port: Int,
     val id: String,
     val params: Map<String, String>,
+    val ping: Int = -1,          // мс, -1 = неизвестно / не отвечает
+    val auto: Boolean = false,   // true = добавлен автоматически из списков
 ) {
+    fun key(): String = "$protocol|$address|$port|$id"
+
     fun toJson(): JSONObject = JSONObject()
         .put("name", name).put("protocol", protocol)
         .put("address", address).put("port", port).put("id", id)
         .put("params", JSONObject(params))
+        .put("ping", ping).put("auto", auto)
 
     companion object {
         fun fromJson(o: JSONObject): Profile {
@@ -26,6 +31,7 @@ data class Profile(
             return Profile(
                 o.getString("name"), o.getString("protocol"),
                 o.getString("address"), o.getInt("port"), o.getString("id"), map,
+                o.optInt("ping", -1), o.optBoolean("auto", false),
             )
         }
     }

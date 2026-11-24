@@ -1,34 +1,17 @@
-# VlessVPN
+# Oxyvo VPN
 
-Android VPN-клиент (Kotlin + Jetpack Compose) на ядре Xray.
-Поддерживает VLESS (TCP/WS/gRPC, TLS и Reality), VMess, Trojan и импорт подписок.
+Android VPN-клиент (Kotlin + Jetpack Compose) на ядре Xray в зелёном стиле.
 
-## Как получить APK (без Android Studio)
+- VLESS (TCP / WS / gRPC, TLS, Reality), VMess, Trojan
+- Сам загружает публичные списки серверов с GitHub, проверяет пинг и оставляет самые быстрые
+- Свои подписки и ссылки `vless://` `vmess://` `trojan://`
+- **Б.С.** (белый список): через VPN идут только выбранные приложения
+- **Ч.С.** (чёрный список): выбранные приложения идут в обход VPN
 
-1. Создайте репозиторий на GitHub и залейте туда содержимое этого проекта.
-2. Откройте вкладку **Actions** → **Build APK** → **Run workflow**.
-3. Когда сборка закончится, скачайте APK из **Artifacts** (`VlessVPN-apk`).
-   Если запушить тег (`git tag v1.0 && git push --tags`), APK появится ещё и в **Releases**.
+## Сборка APK без Android Studio
 
-Воркфлоу сам скачивает ядро `libv2ray.aar` из
-[2dust/AndroidLibXrayLite](https://github.com/2dust/AndroidLibXrayLite).
+1. Залейте содержимое проекта в репозиторий GitHub.
+2. **Actions → Build APK → Run workflow**.
+3. Скачайте APK из **Artifacts**.
 
-## Локальная сборка
-
-```bash
-./scripts/download-core.sh
-gradle assembleRelease      # или откройте проект в Android Studio
-```
-(Android Studio сама создаст Gradle Wrapper.)
-
-## Как пользоваться
-
-Вставьте ссылку подписки (`https://...`) или одиночные ссылки `vless://`, `vmess://`, `trojan://`,
-нажмите «Добавить», выберите сервер и нажмите «Подключиться».
-
-## Структура
-
-- `CoreBridge.kt` — единственное место, где вызывается ядро Xray
-- `ConfigBuilder.kt` — генерация JSON-конфига Xray из ссылки
-- `XrayVpnService.kt` — VpnService, поднимает TUN и отдаёт его ядру
-- `Profile.kt` — разбор ссылок, `Subscription.kt` — загрузка подписок
+Воркфлоу сам скачивает ядро `libv2ray.aar` из 2dust/AndroidLibXrayLite.
