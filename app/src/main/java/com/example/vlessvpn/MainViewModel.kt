@@ -35,7 +35,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             message = "Не удалось распознать ссылку"
             return
         }
-        setProfiles(profiles + parsed)
+        updateProfiles(profiles + parsed)
         message = "Добавлено серверов: ${parsed.size}"
     }
 
@@ -48,7 +48,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (list.isEmpty()) {
                     message = "В подписке нет поддерживаемых серверов"
                 } else {
-                    setProfiles(list)
+                    updateProfiles(list)
                     select(0)
                     message = "Загружено серверов: ${list.size}"
                 }
@@ -67,11 +67,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun delete(i: Int) {
         val list = profiles.toMutableList().also { it.removeAt(i) }
-        setProfiles(list)
+        updateProfiles(list)
         select(selected.coerceIn(0, (list.size - 1).coerceAtLeast(0)))
     }
 
-    private fun setProfiles(list: List<Profile>) {
+    private fun updateProfiles(list: List<Profile>) {
         profiles = list
         storage.saveProfiles(list)
     }
