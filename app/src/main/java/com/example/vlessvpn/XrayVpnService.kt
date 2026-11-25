@@ -38,7 +38,7 @@ class XrayVpnService : VpnService() {
         val mode = storage.splitMode
         val apps = storage.splitApps
         if (mode == 1 && apps.isEmpty()) {
-            fail("Белый список пуст: выберите приложения на вкладке Б.С. / Ч.С.")
+            fail("Белый список пуст: выберите приложения на вкладке «Приложения»")
             return
         }
         VpnState.error.value = null

@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
+    private val appCtx: Application = app
     private val storage = Storage(app)
 
     var profiles by mutableStateOf(storage.profiles()); private set
@@ -22,6 +23,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     var busy by mutableStateOf(false); private set
     var progress by mutableStateOf<String?>(null); private set
     var message by mutableStateOf<String?>(null)
+    var accepted by mutableStateOf(storage.termsAccepted); private set
     var catFilter by mutableIntStateOf(storage.catFilter); private set
     var splitMode by mutableIntStateOf(storage.splitMode); private set
     var splitApps by mutableStateOf(storage.splitApps); private set
@@ -33,6 +35,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 try { Apps.load(getApplication()) } catch (e: Exception) { emptyList() }
             }
         }
+        if (accepted && !storage.autoLoaded) autoSetup()
+    }
+
+    fun acceptTerms() {
+        accepted = true
+        storage.termsAccepted = true
         if (!storage.autoLoaded) autoSetup()
     }
 
@@ -108,35 +116,78 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Главная кнопка: проверяет серверы выбранной категории, выбирает самый быстрый и вызывает onReady. */
+    private fun tier(p: Profile): Int = when {
+        p.real < 0 -> 9
+        catFilter == Defaults.CAT_WL -> 0
+        p.yt && p.tg -> 0
+        p.yt || p.tg -> 1
+        else -> 2
+    }
+
+    /** Достаточно ли хорош сервер по результатам сканера для текущей категории. */
+    private fun acceptable(p: Profile): Boolean =
+        p.real >= 0 && (catFilter == Defaults.CAT_WL || p.yt)
+
+    private fun ranked(list: List<Profile>): List<Profile> =
+        list.filter { it.real >= 0 }.sortedWith(compareBy({ tier(it) }, { it.real }))
+
+    private fun mergeScan(res: List<Profile>) {
+        val m = res.associateBy { it.key() }
+        updateProfiles(
+            profiles.map { p ->
+                m[p.key()]?.let { p.copy(scanned = true, real = it.real, yt = it.yt, tg = it.tg) } ?: p
+            },
+        )
+    }
+
+    /** Главная кнопка: пинг → сканер обхода блокировок → подключение к лучшему серверу. */
     fun autoConnect(onReady: () -> Unit) {
-        if (busy) return
+        if (busy || !accepted) return
         viewModelScope.launch {
             busy = true
             var go = false
             try {
-                val pool = poolOf()
-                var checked: List<Profile>
-                if (pool.isEmpty()) {
+                if (poolOf().isEmpty() && !loadServers()) return@launch
+                progress = "Проверка серверов…"
+                val tcp = Pinger.pingAll(poolOf()) { d, t -> progress = "Проверка серверов: $d из $t" }
+                mergePings(tcp)
+                var alive = tcp.filter { it.ping >= 0 }.sortedBy { it.ping }
+                if (alive.isEmpty()) {
                     if (!loadServers()) return@launch
-                    checked = poolOf()
-                } else {
-                    progress = "Ищу самый быстрый сервер…"
-                    checked = Pinger.pingAll(pool) { d, t -> progress = "Проверка серверов: $d из $t" }
-                    if (checked.none { it.ping >= 0 }) {
-                        if (!loadServers()) return@launch
-                        checked = poolOf()
-                    } else {
-                        mergePings(checked)
-                    }
+                    alive = poolOf().filter { it.ping >= 0 }.sortedBy { it.ping }
                 }
-                val best = checked.filter { it.ping >= 0 }.minByOrNull { it.ping }
-                if (best == null) {
+                if (alive.isEmpty()) {
                     message = "В этой категории нет работающих серверов."
                     return@launch
                 }
-                select(profiles.indexOfFirst { it.key() == best.key() }.coerceAtLeast(0))
-                message = "Выбран: ${best.name} (${best.ping} мс)"
+
+                var chosen: Profile? = null
+                if (Scanner.available()) {
+                    val targets = alive.take(Defaults.SCAN_BATCH * Defaults.SCAN_MAX_BATCHES)
+                    var done = 0
+                    for (batch in targets.chunked(Defaults.SCAN_BATCH)) {
+                        val base = done
+                        val res = Scanner.scanAll(appCtx, batch) { d, _ ->
+                            progress = "Сканер обхода блокировок: ${base + d} из ${targets.size}"
+                        }
+                        done += batch.size
+                        mergeScan(res)
+                        val ok = res.filter { acceptable(it) }
+                        if (ok.isNotEmpty()) {
+                            chosen = ranked(ok).first()
+                            break
+                        }
+                    }
+                    if (chosen == null) {
+                        message = "Сканер не нашёл серверов, обходящих блокировки в этой сети. Подключаю самый быстрый по пингу."
+                    }
+                } else {
+                    message = "Сканер недоступен в этой версии ядра — сервер выбран по пингу."
+                }
+
+                val pick = chosen ?: alive.first()
+                select(profiles.indexOfFirst { it.key() == pick.key() }.coerceAtLeast(0))
+                if (chosen != null) message = "Выбран: ${pick.name} (${pick.real} мс)"
                 go = true
             } catch (e: Exception) {
                 message = "Ошибка: ${e.message}"
@@ -145,6 +196,36 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 busy = false
             }
             if (go) onReady()
+        }
+    }
+
+    /** Сканер обхода для лучших по пингу серверов текущей категории. */
+    fun scan() {
+        if (busy || !accepted) return
+        viewModelScope.launch {
+            busy = true
+            try {
+                if (!Scanner.available()) {
+                    message = "Сканер недоступен в этой версии ядра"
+                    return@launch
+                }
+                val pool = poolOf()
+                val alive = pool.filter { it.ping >= 0 }
+                val base = (if (alive.isNotEmpty()) alive else pool).sortedBy { if (it.ping < 0) Int.MAX_VALUE else it.ping }
+                val targets = base.take(Defaults.SCAN_BATCH * 2)
+                if (targets.isEmpty()) {
+                    message = "Нет серверов для проверки"
+                    return@launch
+                }
+                val res = Scanner.scanAll(appCtx, targets) { d, t -> progress = "Сканер обхода блокировок: $d из $t" }
+                mergeScan(res)
+                message = "Сканер: подошли ${res.count { acceptable(it) }} из ${res.size}"
+            } catch (e: Exception) {
+                message = "Ошибка: ${e.message}"
+            } finally {
+                progress = null
+                busy = false
+            }
         }
     }
 

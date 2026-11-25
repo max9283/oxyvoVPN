@@ -37,6 +37,19 @@ object ConfigBuilder {
         return root.toString()
     }
 
+    /** Лёгкий конфиг только с исходящим подключением — для сканера (без tun). */
+    fun buildTest(p: Profile): String {
+        val root = JSONObject()
+        root.put("log", JSONObject().put("loglevel", "none"))
+        root.put(
+            "outbounds",
+            JSONArray()
+                .put(proxyOutbound(p))
+                .put(JSONObject().put("tag", "direct").put("protocol", "freedom")),
+        )
+        return root.toString()
+    }
+
     private fun proxyOutbound(p: Profile): JSONObject {
         val o = JSONObject().put("tag", "proxy").put("protocol", p.protocol)
         val settings = JSONObject()

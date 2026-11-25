@@ -15,11 +15,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,6 +32,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.window.DialogProperties
 
 class MainActivity : ComponentActivity() {
     private val vm: MainViewModel by viewModels()
@@ -62,7 +68,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             OxyvoTheme {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    AppRoot(vm, onAuto = ::autoConnect, onConnect = ::connect, onDisconnect = ::stopVpn)
+                    AppRoot(vm, onAuto = ::autoConnect, onConnect = ::connect, onDisconnect = ::stopVpn, onExit = { finish() })
                 }
             }
         }
@@ -75,9 +81,21 @@ private fun AppRoot(
     onAuto: () -> Unit,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
+    onExit: () -> Unit,
 ) {
     var tab by rememberSaveable { mutableStateOf(0) }
-    val titles = listOf("Главная", "Серверы", "Б.С. / Ч.С.")
+    val titles = listOf("Главная", "Серверы", "Приложения")
+
+    if (!vm.accepted) {
+        AlertDialog(
+            onDismissRequest = {},
+            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
+            title = { Text("Пользовательское соглашение") },
+            text = { Column(Modifier.verticalScroll(rememberScrollState())) { Text(TERMS) } },
+            confirmButton = { Button(onClick = { vm.acceptTerms() }) { Text("Принимаю") } },
+            dismissButton = { TextButton(onClick = onExit) { Text("Не принимаю") } },
+        )
+    }
 
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
         TabRow(
@@ -96,3 +114,15 @@ private fun AppRoot(
         }
     }
 }
+
+private const val TERMS = """Oxyvo VPN не владеет серверами и не контролирует их. Серверы берутся из публичных списков в интернете и принадлежат третьим лицам.
+
+Владелец сервера технически может видеть, на какие сайты вы заходите, и подменять трафик. Поэтому:
+
+• не вводите пароли, данные банковских карт и другие важные данные, особенно на сайтах без HTTPS;
+• не используйте такие серверы для банков, почты и других важных аккаунтов;
+• серверы могут работать медленно или пропадать в любой момент.
+
+Приложение предоставляется «как есть», без каких-либо гарантий. Вы используете его на свой риск и самостоятельно отвечаете за соблюдение законов своей страны.
+
+Нажимая «Принимаю», вы подтверждаете, что прочитали это и согласны."""

@@ -55,6 +55,21 @@ fun ServersScreen(vm: MainViewModel) {
             }
         }
         item {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Button(
+                    onClick = { vm.scan() },
+                    enabled = !vm.busy && vm.profiles.isNotEmpty(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Сканер обхода блокировок") }
+                Text(
+                    "Сканер делает реальный запрос через сервер (интернет, YouTube, Telegram) из вашей " +
+                        "текущей сети. Для белых списков запускайте его там, где они действуют.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Oxyvo.Muted,
+                )
+            }
+        }
+        item {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (vm.busy) {
                     LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -101,6 +116,9 @@ fun ServersScreen(vm: MainViewModel) {
                         color = Oxyvo.Muted,
                         maxLines = 1,
                     )
+                    if (p.scanned) {
+                        Text(scanText(p), style = MaterialTheme.typography.labelSmall, color = scanColor(p))
+                    }
                 }
                 Text(
                     if (p.ping >= 0) "${p.ping} мс" else "—",

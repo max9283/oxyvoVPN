@@ -46,13 +46,13 @@ fun SplitScreen(vm: MainViewModel) {
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = mode == 0, onClick = { vm.chooseMode(0) }, label = { Text("Выкл") })
-            FilterChip(selected = mode == 1, onClick = { vm.chooseMode(1) }, label = { Text("Белый список") })
-            FilterChip(selected = mode == 2, onClick = { vm.chooseMode(2) }, label = { Text("Чёрный список") })
+            FilterChip(selected = mode == 1, onClick = { vm.chooseMode(1) }, label = { Text("Только выбранные") })
+            FilterChip(selected = mode == 2, onClick = { vm.chooseMode(2) }, label = { Text("Кроме выбранных") })
         }
         Text(
             when (mode) {
-                1 -> "Б.С.: через VPN работают ТОЛЬКО отмеченные приложения, остальные — напрямую."
-                2 -> "Ч.С.: отмеченные приложения работают В ОБХОД VPN, все остальные — через VPN."
+                1 -> "Белый список приложений: через VPN работают ТОЛЬКО отмеченные, остальные — напрямую."
+                2 -> "Чёрный список приложений: отмеченные работают В ОБХОД VPN, все остальные — через VPN."
                 else -> "Все приложения работают через VPN."
             },
             style = MaterialTheme.typography.bodySmall,

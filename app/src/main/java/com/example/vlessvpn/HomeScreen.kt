@@ -65,7 +65,7 @@ fun HomeScreen(
         }
         Spacer(Modifier.height(8.dp))
         Text("Oxyvo VPN", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Oxyvo.Green)
-        Text("быстро · безопасно · свободно", style = MaterialTheme.typography.bodySmall, color = Oxyvo.Muted)
+        Text("быстро · свободно", style = MaterialTheme.typography.bodySmall, color = Oxyvo.Muted)
 
         Spacer(Modifier.height(20.dp))
 
@@ -147,6 +147,13 @@ fun HomeScreen(
                         color = Oxyvo.Muted,
                         maxLines = 1,
                     )
+                    if (profile.scanned) {
+                        Text(
+                            scanText(profile),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = scanColor(profile),
+                        )
+                    }
                 }
             }
             if (profile != null && profile.ping >= 0) {
@@ -193,4 +200,14 @@ private fun PowerIcon(color: Color) {
             cap = StrokeCap.Round,
         )
     }
+}
+
+fun scanText(p: Profile): String =
+    if (p.real < 0) "Сканер: не прошёл"
+    else "Сканер: ${p.real} мс · YouTube ${if (p.yt) "✓" else "✗"} · Telegram ${if (p.tg) "✓" else "✗"}"
+
+fun scanColor(p: Profile): Color = when {
+    p.real < 0 -> Oxyvo.Bad
+    p.yt && p.tg -> Oxyvo.Green
+    else -> Oxyvo.Warn
 }

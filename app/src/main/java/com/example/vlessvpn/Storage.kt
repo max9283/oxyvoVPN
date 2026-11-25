@@ -28,6 +28,10 @@ class Storage(ctx: Context) {
         get() = sp.getInt("cat_filter", 0)
         set(v) = sp.edit().putInt("cat_filter", v).apply()
 
+    var termsAccepted: Boolean
+        get() = sp.getBoolean("terms_accepted", false)
+        set(v) = sp.edit().putBoolean("terms_accepted", v).apply()
+
     var autoLoaded: Boolean
         get() = sp.getBoolean("auto_loaded", false)
         set(v) = sp.edit().putBoolean("auto_loaded", v).apply()

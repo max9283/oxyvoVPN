@@ -32,4 +32,25 @@ class CoreBridge(private val ctx: Context) {
             controller = null
         }
     }
+
+    companion object {
+        @Volatile private var inited = false
+
+        private fun method() = Class.forName("libv2ray.Libv2ray")
+            .getMethod("measureOutboundDelay", String::class.java, String::class.java)
+
+        /** Есть ли в подключённом ядре замер реальной задержки. */
+        fun measureAvailable(): Boolean = try { method(); true } catch (e: Throwable) { false }
+
+        /** Реальная задержка запроса к url через сервер из config (мс), -1 при ошибке. */
+        fun measure(ctx: Context, config: String, url: String): Long = try {
+            if (!inited) {
+                Libv2ray.initCoreEnv(ctx.filesDir.absolutePath, "")
+                inited = true
+            }
+            (method().invoke(null, config, url) as Number).toLong()
+        } catch (e: Throwable) {
+            -1L
+        }
+    }
 }

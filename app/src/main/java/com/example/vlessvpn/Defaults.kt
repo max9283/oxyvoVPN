@@ -31,4 +31,6 @@ object Defaults {
 
     const val MAX_PER_CAT = 1500   // сколько серверов каждой категории проверять пингом
     const val KEEP_PER_CAT = 150   // сколько лучших оставить в каждой категории
+    const val SCAN_BATCH = 12      // сколько серверов сканировать за раз
+    const val SCAN_MAX_BATCHES = 5 // максимум пачек при автоподключении
 }

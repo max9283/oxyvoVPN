@@ -30,7 +30,7 @@ fun CategoryChips(vm: MainViewModel, modifier: Modifier = Modifier) {
 }
 
 fun categoryHint(cat: Int): String = when (cat) {
-    Defaults.CAT_WL -> "Серверы для обхода белых списков (мобильный интернет РФ)."
-    Defaults.CAT_BL -> "Обычные серверы для обхода блокировок (чёрные списки)."
+    Defaults.CAT_WL -> "Против Б.С.: серверы для мест, где открыты только госсервисы (белые списки, мобильный интернет)."
+    Defaults.CAT_BL -> "Против Ч.С.: серверы для обхода блокировок YouTube, Telegram и т.д."
     else -> "Показаны серверы всех категорий."
 }

@@ -15,6 +15,10 @@ data class Profile(
     val ping: Int = -1,          // мс, -1 = неизвестно / не отвечает
     val auto: Boolean = false,   // true = добавлен автоматически из списков
     val cat: Int = 2,            // 1 = против белых списков (Б.С.), 2 = против чёрных (Ч.С.)
+    val scanned: Boolean = false, // прошёл ли сервер сканер обхода
+    val real: Int = -1,          // реальная задержка через сервер, мс (-1 = не прошёл)
+    val yt: Boolean = false,     // открывается YouTube
+    val tg: Boolean = false,     // открывается Telegram
 ) {
     fun key(): String = "$protocol|$address|$port|$id"
 
@@ -31,7 +35,7 @@ data class Profile(
         .put("name", name).put("protocol", protocol)
         .put("address", address).put("port", port).put("id", id)
         .put("params", JSONObject(params))
-        .put("ping", ping).put("auto", auto).put("cat", cat)
+        .put("ping", ping).put("auto", auto).put("cat", cat).put("scanned", scanned).put("real", real).put("yt", yt).put("tg", tg)
 
     companion object {
         fun fromJson(o: JSONObject): Profile {
@@ -42,6 +46,8 @@ data class Profile(
                 o.getString("name"), o.getString("protocol"),
                 o.getString("address"), o.getInt("port"), o.getString("id"), map,
                 o.optInt("ping", -1), o.optBoolean("auto", false), o.optInt("cat", 2),
+                o.optBoolean("scanned", false), o.optInt("real", -1),
+                o.optBoolean("yt", false), o.optBoolean("tg", false),
             )
         }
     }
