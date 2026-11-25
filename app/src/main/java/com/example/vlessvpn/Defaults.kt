@@ -1,6 +1,6 @@
 package com.example.vlessvpn
 
-class Src(val url: String, val cat: Int)
+class Src(val url: String, val cat: Int, val mirrors: List<String> = emptyList())
 
 /** Встроенные публичные списки серверов (GitHub). Приложение само их загружает и проверяет. */
 object Defaults {
@@ -18,6 +18,18 @@ object Defaults {
             Src(IG + "WHITE-CIDR-RU-all.txt", CAT_WL),
             Src(IG + "WHITE-CIDR-RU-checked.txt", CAT_WL),
             Src(IG + "WHITE-SNI-RU-all.txt", CAT_WL),
+            // Случайная выборка свежих серверов для белых списков (несколько зеркал на разных хостингах)
+            Src(
+                "https://random.solovyov-jenya2004.workers.dev/?n=300",
+                CAT_WL,
+                mirrors = listOf(
+                    "https://solovyov-jenya2004.vercel.app/random/?n=300",
+                    "https://all-subs.netlify.app/random/?n=300",
+                    "https://all-subs.solovyov-jenya2004.deno.net/random/?n=300",
+                    "https://ddrnvxbsxvidyagqoewg.supabase.co/functions/v1/all-subs/random/?n=300",
+                    "https://all-subs.onrender.com/random/?n=300",
+                ),
+            ),
             // Против чёрных списков (обычные блокировки)
             Src(IG + "BLACK_VLESS_RUS.txt", CAT_BL),
             Src(IG + "BLACK_VLESS_RUS_mobile.txt", CAT_BL),

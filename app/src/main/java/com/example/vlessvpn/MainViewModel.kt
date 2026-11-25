@@ -62,15 +62,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Загружает все источники, проверяет пингом и оставляет лучшие серверы каждой категории. */
-    private suspend fun loadServers(): Boolean {
-        progress = "Загружаю списки серверов…"
-        val sources = Defaults.SOURCES + storage.customSubs.map { Src(it, Defaults.CAT_BL) }
+    private suspend fun loadServers(viaYandex: Boolean = false): Boolean {
+        progress = if (viaYandex) "Загружаю серверы через Яндекс Переводчик…" else "Загружаю списки серверов…"
+        val all = Defaults.SOURCES + storage.customSubs.map { Src(it, Defaults.CAT_BL) }
+        // Через переводчик грузим только списки для белых списков — они нужны, когда интернет глушат
+        val sources = if (viaYandex) all.filter { it.cat == Defaults.CAT_WL } else all
         val fetched = withContext(Dispatchers.IO) {
             coroutineScope {
                 sources.map { s ->
                     async {
                         runCatching {
-                            Subscription.fetch(s.url).map { it.copy(cat = s.cat, auto = true) }
+                            Subscription.fetchWithFallback(s, viaYandex).map { it.copy(cat = s.cat, auto = true) }
                         }.getOrDefault(emptyList())
                     }
                 }.awaitAll().flatten()
@@ -94,19 +96,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .flatMap { (_, l) -> l.sortedBy { it.ping }.take(Defaults.KEEP_PER_CAT) }
             .sortedWith(compareBy({ it.cat }, { it.ping }))
         val manual = profiles.filter { !it.auto }
-        updateProfiles(manual + best)
+        // При загрузке только Б.С.-списков остальные найденные ранее серверы не трогаем
+        val keep = if (viaYandex) profiles.filter { it.auto && it.cat != Defaults.CAT_WL } else emptyList()
+        updateProfiles(manual + keep + best)
         storage.autoLoaded = true
         val wl = best.count { it.cat == Defaults.CAT_WL }
         message = "Найдено рабочих: против Б.С. — $wl, против Ч.С. — ${best.size - wl}"
         return true
     }
 
-    fun autoSetup() {
-        if (busy) return
+    /** Обновление списков; viaYandex = через Яндекс Переводчик (когда интернет глушат). */
+    fun autoSetup(viaYandex: Boolean = false) {
+        if (busy || !accepted) return
         viewModelScope.launch {
             busy = true
             try {
-                if (loadServers()) select(bestIndex())
+                if (loadServers(viaYandex)) select(bestIndex())
             } catch (e: Exception) {
                 message = "Ошибка: ${e.message}"
             } finally {

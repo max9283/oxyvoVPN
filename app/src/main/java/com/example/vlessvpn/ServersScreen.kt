@@ -56,6 +56,21 @@ fun ServersScreen(vm: MainViewModel) {
         }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                OutlinedButton(
+                    onClick = { vm.autoSetup(viaYandex = true) },
+                    enabled = !vm.busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Обновить через Яндекс Переводчик") }
+                Text(
+                    "Если интернет глушат (белые списки): серверы Б.С. загрузятся через translate.yandex.ru. " +
+                        "Способ нестабильный — часть конфигов может прийти испорченной.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Oxyvo.Muted,
+                )
+            }
+        }
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Button(
                     onClick = { vm.scan() },
                     enabled = !vm.busy && vm.profiles.isNotEmpty(),

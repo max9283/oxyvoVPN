@@ -11,7 +11,7 @@ object ConfigBuilder {
         root.put("log", JSONObject().put("loglevel", "warning"))
         root.put(
             "dns",
-            JSONObject().put("servers", JSONArray().put("1.1.1.1").put("8.8.8.8")),
+            JSONObject().put("servers", JSONArray().put("localhost").put("1.1.1.1").put("8.8.8.8")),
         )
         root.put(
             "inbounds",
@@ -90,7 +90,7 @@ object ConfigBuilder {
     }
 
     private fun streamSettings(p: Profile): JSONObject {
-        val net = (p.params["type"] ?: "tcp").let { if (it == "raw") "tcp" else it }
+        val net = (p.params["type"] ?: "tcp").let { if (it == "raw") "tcp" else if (it == "splithttp") "xhttp" else it }
         val security = p.params["security"] ?: "none"
         val s = JSONObject().put("network", net).put("security", security)
 
@@ -128,6 +128,14 @@ object ConfigBuilder {
                 "grpcSettings",
                 JSONObject().put("serviceName", p.params["serviceName"] ?: p.params["path"] ?: ""),
             )
+            "xhttp" -> {
+                val x = JSONObject().put("path", p.params["path"] ?: "/").put("mode", p.params["mode"] ?: "auto")
+                p.params["host"]?.takeIf { it.isNotEmpty() }?.let { x.put("host", it) }
+                p.params["extra"]?.takeIf { it.isNotEmpty() }?.let {
+                    try { x.put("extra", JSONObject(it)) } catch (_: Exception) {}
+                }
+                s.put("xhttpSettings", x)
+            }
             "httpupgrade" -> s.put(
                 "httpupgradeSettings",
                 JSONObject().put("path", p.params["path"] ?: "/").put("host", p.params["host"] ?: ""),

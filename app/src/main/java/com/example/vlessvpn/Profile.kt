@@ -25,7 +25,7 @@ data class Profile(
     /** Поддерживает ли наш конфиг-билдер этот транспорт. */
     fun supported(): Boolean {
         val net = params["type"] ?: "tcp"
-        if (net !in setOf("tcp", "raw", "ws", "grpc", "httpupgrade")) return false
+        if (net !in setOf("tcp", "raw", "ws", "grpc", "httpupgrade", "xhttp", "splithttp")) return false
         if ((net == "tcp" || net == "raw") && params["headerType"] == "http") return false
         if (params["security"] == "reality" && params["pbk"].isNullOrEmpty()) return false
         return true
