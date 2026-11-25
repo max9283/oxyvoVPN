@@ -22,6 +22,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     var busy by mutableStateOf(false); private set
     var progress by mutableStateOf<String?>(null); private set
     var message by mutableStateOf<String?>(null)
+    var catFilter by mutableIntStateOf(storage.catFilter); private set
     var splitMode by mutableIntStateOf(storage.splitMode); private set
     var splitApps by mutableStateOf(storage.splitApps); private set
     var apps by mutableStateOf<List<AppInfo>>(emptyList()); private set
@@ -35,41 +36,69 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (!storage.autoLoaded) autoSetup()
     }
 
-    /** Загружает встроенные (и свои) списки, проверяет пингом и оставляет лучшие серверы. */
+    private fun poolOf(): List<Profile> = profiles.filter { catFilter == 0 || it.cat == catFilter }
+
+    private fun bestIndex(): Int {
+        val inCat = profiles.withIndex().filter { catFilter == 0 || it.value.cat == catFilter }
+        return inCat.filter { it.value.ping >= 0 }.minByOrNull { it.value.ping }?.index
+            ?: inCat.firstOrNull()?.index
+            ?: 0
+    }
+
+    /** 0 = все, 1 = против Б.С., 2 = против Ч.С. */
+    fun chooseCat(cat: Int) {
+        catFilter = cat
+        storage.catFilter = cat
+        val cur = profiles.getOrNull(selected)
+        if (cat != 0 && cur?.cat != cat) select(bestIndex())
+    }
+
+    /** Загружает все источники, проверяет пингом и оставляет лучшие серверы каждой категории. */
+    private suspend fun loadServers(): Boolean {
+        progress = "Загружаю списки серверов…"
+        val sources = Defaults.SOURCES + storage.customSubs.map { Src(it, Defaults.CAT_BL) }
+        val fetched = withContext(Dispatchers.IO) {
+            coroutineScope {
+                sources.map { s ->
+                    async {
+                        runCatching {
+                            Subscription.fetch(s.url).map { it.copy(cat = s.cat, auto = true) }
+                        }.getOrDefault(emptyList())
+                    }
+                }.awaitAll().flatten()
+            }
+        }
+        val usable = fetched.filter { it.supported() }.distinctBy { it.key() }
+        if (usable.isEmpty()) {
+            message = "Не удалось загрузить списки. Проверьте интернет (GitHub может быть недоступен)."
+            return false
+        }
+        val candidates = usable.groupBy { it.cat }
+            .flatMap { (_, l) -> l.shuffled().take(Defaults.MAX_PER_CAT) }
+        progress = "Проверяю серверы…"
+        val checked = Pinger.pingAll(candidates) { d, t -> progress = "Проверка серверов: $d из $t" }
+        val alive = checked.filter { it.ping >= 0 }
+        if (alive.isEmpty()) {
+            message = "Ни один сервер не ответил. Попробуйте позже."
+            return false
+        }
+        val best = alive.groupBy { it.cat }
+            .flatMap { (_, l) -> l.sortedBy { it.ping }.take(Defaults.KEEP_PER_CAT) }
+            .sortedWith(compareBy({ it.cat }, { it.ping }))
+        val manual = profiles.filter { !it.auto }
+        updateProfiles(manual + best)
+        storage.autoLoaded = true
+        val wl = best.count { it.cat == Defaults.CAT_WL }
+        message = "Найдено рабочих: против Б.С. — $wl, против Ч.С. — ${best.size - wl}"
+        return true
+    }
+
     fun autoSetup() {
         if (busy) return
         viewModelScope.launch {
             busy = true
             try {
-                progress = "Загружаю списки серверов…"
-                val sources = Defaults.SOURCES + storage.customSubs
-                val fetched = withContext(Dispatchers.IO) {
-                    coroutineScope {
-                        sources.map { url ->
-                            async { runCatching { Subscription.fetch(url) }.getOrDefault(emptyList()) }
-                        }.awaitAll().flatten()
-                    }
-                }
-                val candidates = fetched.distinctBy { it.key() }.shuffled().take(Defaults.MAX_CANDIDATES)
-                if (candidates.isEmpty()) {
-                    message = "Не удалось загрузить списки. Проверьте интернет (GitHub может быть недоступен)."
-                    return@launch
-                }
-                progress = "Проверяю серверы…"
-                val checked = Pinger.pingAll(candidates) { d, t -> progress = "Проверка серверов: $d из $t" }
-                val best = checked.filter { it.ping >= 0 }
-                    .sortedBy { it.ping }
-                    .take(Defaults.KEEP)
-                    .map { it.copy(auto = true) }
-                if (best.isEmpty()) {
-                    message = "Ни один сервер не ответил. Попробуйте позже."
-                    return@launch
-                }
-                val manual = profiles.filter { !it.auto }
-                updateProfiles(manual + best)
-                select(manual.size)
-                storage.autoLoaded = true
-                message = "Найдено рабочих серверов: ${best.size}"
+                if (loadServers()) select(bestIndex())
             } catch (e: Exception) {
                 message = "Ошибка: ${e.message}"
             } finally {
@@ -77,6 +106,53 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 busy = false
             }
         }
+    }
+
+    /** Главная кнопка: проверяет серверы выбранной категории, выбирает самый быстрый и вызывает onReady. */
+    fun autoConnect(onReady: () -> Unit) {
+        if (busy) return
+        viewModelScope.launch {
+            busy = true
+            var go = false
+            try {
+                val pool = poolOf()
+                var checked: List<Profile>
+                if (pool.isEmpty()) {
+                    if (!loadServers()) return@launch
+                    checked = poolOf()
+                } else {
+                    progress = "Ищу самый быстрый сервер…"
+                    checked = Pinger.pingAll(pool) { d, t -> progress = "Проверка серверов: $d из $t" }
+                    if (checked.none { it.ping >= 0 }) {
+                        if (!loadServers()) return@launch
+                        checked = poolOf()
+                    } else {
+                        mergePings(checked)
+                    }
+                }
+                val best = checked.filter { it.ping >= 0 }.minByOrNull { it.ping }
+                if (best == null) {
+                    message = "В этой категории нет работающих серверов."
+                    return@launch
+                }
+                select(profiles.indexOfFirst { it.key() == best.key() }.coerceAtLeast(0))
+                message = "Выбран: ${best.name} (${best.ping} мс)"
+                go = true
+            } catch (e: Exception) {
+                message = "Ошибка: ${e.message}"
+            } finally {
+                progress = null
+                busy = false
+            }
+            if (go) onReady()
+        }
+    }
+
+    private fun mergePings(checked: List<Profile>) {
+        val m = checked.associate { it.key() to it.ping }
+        val cur = profiles.getOrNull(selected)?.key()
+        updateProfiles(profiles.map { p -> m[p.key()]?.let { p.copy(ping = it) } ?: p })
+        select(profiles.indexOfFirst { it.key() == cur }.coerceAtLeast(0))
     }
 
     /** Повторная проверка пинга всех серверов с сортировкой. */
@@ -87,7 +163,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val current = profiles.getOrNull(selected)?.key()
                 val res = Pinger.pingAll(profiles) { d, t -> progress = "Проверка серверов: $d из $t" }
-                val sorted = res.sortedBy { if (it.ping < 0) Int.MAX_VALUE else it.ping }
+                val sorted = res.sortedWith(
+                    compareBy({ it.cat }, { if (it.ping < 0) Int.MAX_VALUE else it.ping }),
+                )
                 updateProfiles(sorted)
                 select(sorted.indexOfFirst { it.key() == current }.coerceAtLeast(0))
                 message = "Рабочих серверов: ${sorted.count { it.ping >= 0 }} из ${sorted.size}"
@@ -98,7 +176,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Ссылка подписки (http...) добавляется к списку источников, vless:// vmess:// trojan:// — как свой сервер. */
+    /** Ссылка подписки (http...) добавляется к источникам, vless:// vmess:// trojan:// — как свой сервер. */
     fun add(input: String) {
         val text = input.trim()
         if (text.isEmpty()) return
@@ -131,7 +209,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         select(selected.coerceIn(0, (list.size - 1).coerceAtLeast(0)))
     }
 
-    /** 0 = выкл, 1 = белый список, 2 = чёрный список. */
+    /** 0 = выкл, 1 = белый список приложений, 2 = чёрный список приложений. */
     fun chooseMode(mode: Int) {
         splitMode = mode
         storage.splitMode = mode

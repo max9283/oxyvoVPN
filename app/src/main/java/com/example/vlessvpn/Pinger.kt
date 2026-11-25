@@ -26,7 +26,7 @@ object Pinger {
     /** Возвращает тот же список (в том же порядке), у каждого сервера заполнен ping (-1 = не отвечает). */
     suspend fun pingAll(
         list: List<Profile>,
-        concurrency: Int = 60,
+        concurrency: Int = 100,
         onProgress: (Int, Int) -> Unit = { _, _ -> },
     ): List<Profile> = coroutineScope {
         val sem = Semaphore(concurrency)

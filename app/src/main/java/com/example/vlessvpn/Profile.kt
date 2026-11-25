@@ -14,14 +14,24 @@ data class Profile(
     val params: Map<String, String>,
     val ping: Int = -1,          // мс, -1 = неизвестно / не отвечает
     val auto: Boolean = false,   // true = добавлен автоматически из списков
+    val cat: Int = 2,            // 1 = против белых списков (Б.С.), 2 = против чёрных (Ч.С.)
 ) {
     fun key(): String = "$protocol|$address|$port|$id"
+
+    /** Поддерживает ли наш конфиг-билдер этот транспорт. */
+    fun supported(): Boolean {
+        val net = params["type"] ?: "tcp"
+        if (net !in setOf("tcp", "raw", "ws", "grpc", "httpupgrade")) return false
+        if ((net == "tcp" || net == "raw") && params["headerType"] == "http") return false
+        if (params["security"] == "reality" && params["pbk"].isNullOrEmpty()) return false
+        return true
+    }
 
     fun toJson(): JSONObject = JSONObject()
         .put("name", name).put("protocol", protocol)
         .put("address", address).put("port", port).put("id", id)
         .put("params", JSONObject(params))
-        .put("ping", ping).put("auto", auto)
+        .put("ping", ping).put("auto", auto).put("cat", cat)
 
     companion object {
         fun fromJson(o: JSONObject): Profile {
@@ -31,7 +41,7 @@ data class Profile(
             return Profile(
                 o.getString("name"), o.getString("protocol"),
                 o.getString("address"), o.getInt("port"), o.getString("id"), map,
-                o.optInt("ping", -1), o.optBoolean("auto", false),
+                o.optInt("ping", -1), o.optBoolean("auto", false), o.optInt("cat", 2),
             )
         }
     }

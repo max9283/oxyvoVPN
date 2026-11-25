@@ -45,6 +45,10 @@ class MainActivity : ComponentActivity() {
         startService(Intent(this, XrayVpnService::class.java).setAction(XrayVpnService.ACTION_START))
     }
 
+    private fun autoConnect() {
+        vm.autoConnect { connect() }
+    }
+
     private fun stopVpn() {
         startService(Intent(this, XrayVpnService::class.java).setAction(XrayVpnService.ACTION_STOP))
     }
@@ -58,7 +62,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             OxyvoTheme {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    AppRoot(vm, onConnect = ::connect, onDisconnect = ::stopVpn)
+                    AppRoot(vm, onAuto = ::autoConnect, onConnect = ::connect, onDisconnect = ::stopVpn)
                 }
             }
         }
@@ -66,7 +70,12 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun AppRoot(vm: MainViewModel, onConnect: () -> Unit, onDisconnect: () -> Unit) {
+private fun AppRoot(
+    vm: MainViewModel,
+    onAuto: () -> Unit,
+    onConnect: () -> Unit,
+    onDisconnect: () -> Unit,
+) {
     var tab by rememberSaveable { mutableStateOf(0) }
     val titles = listOf("Главная", "Серверы", "Б.С. / Ч.С.")
 
@@ -81,7 +90,7 @@ private fun AppRoot(vm: MainViewModel, onConnect: () -> Unit, onDisconnect: () -
             }
         }
         when (tab) {
-            0 -> HomeScreen(vm, onConnect, onDisconnect)
+            0 -> HomeScreen(vm, onAuto, onConnect, onDisconnect)
             1 -> ServersScreen(vm)
             else -> SplitScreen(vm)
         }

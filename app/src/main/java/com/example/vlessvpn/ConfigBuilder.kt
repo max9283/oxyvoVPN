@@ -77,7 +77,7 @@ object ConfigBuilder {
     }
 
     private fun streamSettings(p: Profile): JSONObject {
-        val net = p.params["type"] ?: "tcp"
+        val net = (p.params["type"] ?: "tcp").let { if (it == "raw") "tcp" else it }
         val security = p.params["security"] ?: "none"
         val s = JSONObject().put("network", net).put("security", security)
 

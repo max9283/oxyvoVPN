@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
@@ -33,12 +33,19 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun ServersScreen(vm: MainViewModel) {
     var input by remember { mutableStateOf("") }
+    val visible = vm.profiles
+        .mapIndexed { i, p -> i to p }
+        .filter { vm.catFilter == 0 || it.second.cat == vm.catFilter }
 
     LazyColumn(
         Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        item { CategoryChips(vm) }
+        item {
+            Text(categoryHint(vm.catFilter), style = MaterialTheme.typography.bodySmall, color = Oxyvo.Muted)
+        }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { vm.autoSetup() }, enabled = !vm.busy) { Text("Обновить список") }
@@ -48,14 +55,14 @@ fun ServersScreen(vm: MainViewModel) {
             }
         }
         item {
-            if (vm.busy) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (vm.busy) {
                     LinearProgressIndicator(Modifier.fillMaxWidth())
                     Text(vm.progress ?: "Подождите…", style = MaterialTheme.typography.bodySmall, color = Oxyvo.Muted)
                 }
-            }
-            vm.message?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = Oxyvo.Muted)
+                vm.message?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = Oxyvo.Muted)
+                }
             }
         }
         item {
@@ -71,7 +78,7 @@ fun ServersScreen(vm: MainViewModel) {
                 Text("Добавить")
             }
         }
-        itemsIndexed(vm.profiles) { i, p ->
+        items(visible) { (i, p) ->
             val sel = i == vm.selected
             Row(
                 Modifier.fillMaxWidth()
@@ -88,7 +95,8 @@ fun ServersScreen(vm: MainViewModel) {
                 Column(Modifier.weight(1f)) {
                     Text(p.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
                     Text(
-                        "${p.protocol.uppercase()} · ${p.address}:${p.port}",
+                        (if (p.cat == Defaults.CAT_WL) "Б.С. · " else "Ч.С. · ") +
+                            "${p.protocol.uppercase()} · ${p.address}:${p.port}",
                         style = MaterialTheme.typography.bodySmall,
                         color = Oxyvo.Muted,
                         maxLines = 1,

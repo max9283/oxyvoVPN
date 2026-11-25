@@ -23,6 +23,11 @@ class Storage(ctx: Context) {
         get() = sp.getInt("selected", 0)
         set(v) = sp.edit().putInt("selected", v).apply()
 
+    /** 0 = все серверы, 1 = против белых списков, 2 = против чёрных. */
+    var catFilter: Int
+        get() = sp.getInt("cat_filter", 0)
+        set(v) = sp.edit().putInt("cat_filter", v).apply()
+
     var autoLoaded: Boolean
         get() = sp.getBoolean("auto_loaded", false)
         set(v) = sp.edit().putBoolean("auto_loaded", v).apply()
