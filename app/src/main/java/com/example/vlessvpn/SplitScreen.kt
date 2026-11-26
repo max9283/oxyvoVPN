@@ -1,8 +1,8 @@
 package com.example.vlessvpn
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,14 +13,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,8 +29,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 @Composable
 fun SplitScreen(vm: MainViewModel) {
@@ -44,10 +48,14 @@ fun SplitScreen(vm: MainViewModel) {
     }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = mode == 0, onClick = { vm.chooseMode(0) }, label = { Text("Выкл") })
-            FilterChip(selected = mode == 1, onClick = { vm.chooseMode(1) }, label = { Text("Только выбранные") })
-            FilterChip(selected = mode == 2, onClick = { vm.chooseMode(2) }, label = { Text("Кроме выбранных") })
+        Text("Приложения", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Oxyvo.Green)
+        Row(
+            Modifier.horizontalScroll(rememberScrollState()).padding(top = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            GlassChip("Выкл", mode == 0) { vm.chooseMode(0) }
+            GlassChip("Только выбранные", mode == 1) { vm.chooseMode(1) }
+            GlassChip("Кроме выбранных", mode == 2) { vm.chooseMode(2) }
         }
         Text(
             when (mode) {
@@ -70,32 +78,47 @@ fun SplitScreen(vm: MainViewModel) {
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            label = { Text("Поиск приложения") },
+            label = { Text("Поиск приложения", maxLines = 1) },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Oxyvo.Green,
+                unfocusedBorderColor = Color.White.copy(alpha = 0.25f),
+                focusedContainerColor = Color.White.copy(alpha = 0.06f),
+                unfocusedContainerColor = Color.White.copy(alpha = 0.04f),
+                focusedLabelColor = Oxyvo.Green,
+                cursorColor = Oxyvo.Green,
+            ),
+            modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
         )
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "Выбрано: ${selectedApps.size}",
                 style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = { vm.clearApps() }, enabled = selectedApps.isNotEmpty()) { Text("Сбросить") }
+            Text(
+                "Сбросить",
+                color = if (selectedApps.isNotEmpty()) Oxyvo.Green else Oxyvo.Muted,
+                maxLines = 1,
+                modifier = Modifier
+                    .clickable(enabled = selectedApps.isNotEmpty()) { vm.clearApps() }
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+            )
         }
 
         if (vm.apps.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Oxyvo.Green)
+            }
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(list, key = { it.pkg }) { app ->
                     val checked = app.pkg in selectedApps
                     Row(
                         Modifier.fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                if (checked) MaterialTheme.colorScheme.primaryContainer
-                                else MaterialTheme.colorScheme.surfaceVariant,
-                            )
+                            .glass(RoundedCornerShape(14.dp), selected = checked)
                             .clickable { vm.toggleApp(app.pkg) }
                             .padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -105,8 +128,17 @@ fun SplitScreen(vm: MainViewModel) {
                             app.label,
                             modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
-                        Checkbox(checked = checked, onCheckedChange = { vm.toggleApp(app.pkg) })
+                        Checkbox(
+                            checked = checked,
+                            onCheckedChange = { vm.toggleApp(app.pkg) },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = Oxyvo.Green,
+                                checkmarkColor = Color(0xFF00210E),
+                                uncheckedColor = Oxyvo.Muted,
+                            ),
+                        )
                     }
                 }
             }

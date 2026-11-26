@@ -11,7 +11,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -67,7 +69,7 @@ class MainActivity : ComponentActivity() {
         )
         setContent {
             OxyvoTheme {
-                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Surface(Modifier.fillMaxSize(), color = Color.Transparent) {
                     AppRoot(vm, onAuto = ::autoConnect, onConnect = ::connect, onDisconnect = ::stopVpn, onExit = { finish() })
                 }
             }
@@ -84,12 +86,12 @@ private fun AppRoot(
     onExit: () -> Unit,
 ) {
     var tab by rememberSaveable { mutableStateOf(0) }
-    val titles = listOf("Главная", "Серверы", "Приложения")
 
     if (!vm.accepted) {
         AlertDialog(
             onDismissRequest = {},
             properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
+            containerColor = Color(0xFF0C1F15),
             title = { Text("Пользовательское соглашение") },
             text = { Column(Modifier.verticalScroll(rememberScrollState())) { Text(TERMS) } },
             confirmButton = { Button(onClick = { vm.acceptTerms() }) { Text("Принимаю") } },
@@ -97,20 +99,16 @@ private fun AppRoot(
         )
     }
 
-    Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-        TabRow(
-            selectedTabIndex = tab,
-            containerColor = Color.Transparent,
-            contentColor = MaterialTheme.colorScheme.primary,
-        ) {
-            titles.forEachIndexed { i, title ->
-                Tab(selected = tab == i, onClick = { tab = i }, text = { Text(title) })
+    GlassBackground {
+        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                when (tab) {
+                    0 -> HomeScreen(vm, onAuto, onConnect, onDisconnect)
+                    1 -> ServersScreen(vm)
+                    else -> SplitScreen(vm)
+                }
             }
-        }
-        when (tab) {
-            0 -> HomeScreen(vm, onAuto, onConnect, onDisconnect)
-            1 -> ServersScreen(vm)
-            else -> SplitScreen(vm)
+            GlassBottomBar(tab) { tab = it }
         }
     }
 }

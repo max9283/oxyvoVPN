@@ -3,7 +3,9 @@ package com.example.vlessvpn
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,7 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -36,6 +37,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -58,27 +60,30 @@ fun HomeScreen(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Логотип и название
-        Box(Modifier.size(72.dp).clip(RoundedCornerShape(21.dp))) {
+        Box(Modifier.size(72.dp).clip(RoundedCornerShape(21.dp)).border(1.dp, Glass.Border, RoundedCornerShape(21.dp))) {
             Image(painterResource(R.drawable.ic_launcher_background), null, Modifier.fillMaxSize())
             Image(painterResource(R.drawable.ic_launcher_foreground), null, Modifier.fillMaxSize())
         }
         Spacer(Modifier.height(8.dp))
-        Text("Oxyvo VPN", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Oxyvo.Green)
-        Text("быстро · свободно", style = MaterialTheme.typography.bodySmall, color = Oxyvo.Muted)
+        Text("Oxyvo VPN", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Oxyvo.Green, maxLines = 1)
+        Text("быстро · свободно", style = MaterialTheme.typography.bodySmall, color = Oxyvo.Muted, maxLines = 1)
 
         Spacer(Modifier.height(20.dp))
 
         // Главная кнопка: автоподключение к самому быстрому серверу
-        Box(Modifier.size(210.dp), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.size(210.dp).border(1.dp, Color.White.copy(alpha = 0.10f), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
             val on = active || searching
             val colors = if (on) listOf(Color(0xFF3DF28B), Color(0xFF00843B))
-            else listOf(Color(0xFF1F3D2B), Color(0xFF10261A))
+            else listOf(Color(0x33FFFFFF), Color(0x0DFFFFFF))
             Box(
                 Modifier
                     .size(176.dp)
                     .clip(CircleShape)
                     .background(Brush.radialGradient(colors))
+                    .border(2.dp, Glass.Border, CircleShape)
                     .clickable(enabled = !searching) { if (active) onDisconnect() else onAuto() },
                 contentAlignment = Alignment.Center,
             ) {
@@ -97,7 +102,7 @@ fun HomeScreen(
             status == VpnStatus.ERROR -> "Ошибка" to Oxyvo.Bad
             else -> "Отключено" to Oxyvo.Muted
         }
-        Text(title, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = color)
+        Text(title, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = color, maxLines = 1)
         val sub = when {
             searching -> vm.progress
             status == VpnStatus.ERROR -> error ?: "неизвестная ошибка"
@@ -127,10 +132,7 @@ fun HomeScreen(
 
         // Текущий сервер
         Row(
-            Modifier.fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .padding(16.dp),
+            Modifier.fillMaxWidth().glass().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
@@ -139,6 +141,7 @@ fun HomeScreen(
                     profile?.name ?: "не выбран",
                     style = MaterialTheme.typography.bodyLarge,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 if (profile != null) {
                     Text(
@@ -146,29 +149,103 @@ fun HomeScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = Oxyvo.Muted,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     if (profile.scanned) {
                         Text(
                             scanText(profile),
                             style = MaterialTheme.typography.labelSmall,
                             color = scanColor(profile),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
             }
             if (profile != null && profile.ping >= 0) {
-                Text("${profile.ping} мс", color = pingColor(profile.ping), fontWeight = FontWeight.SemiBold)
+                Text(
+                    "${profile.ping} мс",
+                    color = pingColor(profile.ping),
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
             }
         }
 
-        // Второстепенная кнопка: подключиться к выбранному вручную серверу
         Spacer(Modifier.height(12.dp))
-        OutlinedButton(
+        TrafficCard(vm, connected)
+
+        Spacer(Modifier.height(12.dp))
+        GlassButton(
+            "Подключиться к выбранному серверу",
             onClick = onConnectSelected,
             enabled = profile != null && !active && !searching,
             modifier = Modifier.fillMaxWidth(),
-        ) { Text("Подключиться к выбранному серверу") }
+        )
     }
+}
+
+@Composable
+private fun TrafficCard(vm: MainViewModel, connected: Boolean) {
+    Column(Modifier.fillMaxWidth().glass().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Расход трафика",
+                style = MaterialTheme.typography.labelMedium,
+                color = Oxyvo.Muted,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+            )
+            Text(
+                "Сбросить",
+                style = MaterialTheme.typography.labelMedium,
+                color = Oxyvo.Green,
+                maxLines = 1,
+                modifier = Modifier.clickable { vm.resetTraffic() },
+            )
+        }
+        TrafficRow("Сессия", vm.sessionRx, vm.sessionTx)
+        if (connected) TrafficRow("Скорость", vm.speedRx, vm.speedTx, perSecond = true)
+        TrafficRow("Всего", vm.totalRx, vm.totalTx)
+        Text(
+            "Считается обмен приложения с сервером, значения приблизительные.",
+            style = MaterialTheme.typography.labelSmall,
+            color = Oxyvo.Muted,
+        )
+    }
+}
+
+@Composable
+private fun TrafficRow(label: String, rx: Long, tx: Long, perSecond: Boolean = false) {
+    val suffix = if (perSecond) "/с" else ""
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = Oxyvo.Muted, fontSize = 14.sp, maxLines = 1, modifier = Modifier.weight(0.8f))
+        Text(
+            "↓ ${formatBytes(rx)}$suffix",
+            color = Oxyvo.Green,
+            fontSize = 14.sp,
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.weight(1.1f),
+        )
+        Text(
+            "↑ ${formatBytes(tx)}$suffix",
+            color = Color(0xFF7ED9E6),
+            fontSize = 14.sp,
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.weight(1.1f),
+        )
+    }
+}
+
+fun formatBytes(b: Long): String = when {
+    b < 1024L -> "$b Б"
+    b < 1024L * 1024 -> "%.1f КБ".format(b / 1024.0)
+    b < 1024L * 1024 * 1024 -> "%.1f МБ".format(b / (1024.0 * 1024))
+    else -> "%.2f ГБ".format(b / (1024.0 * 1024 * 1024))
 }
 
 fun pingColor(ping: Int): Color = when {
@@ -176,6 +253,16 @@ fun pingColor(ping: Int): Color = when {
     ping < 300 -> Oxyvo.Green
     ping < 800 -> Oxyvo.Warn
     else -> Oxyvo.Bad
+}
+
+fun scanText(p: Profile): String =
+    if (p.real < 0) "Сканер: не прошёл"
+    else "Сканер: ${p.real} мс · YouTube ${if (p.yt) "✓" else "✗"} · Telegram ${if (p.tg) "✓" else "✗"}"
+
+fun scanColor(p: Profile): Color = when {
+    p.real < 0 -> Oxyvo.Bad
+    p.yt && p.tg -> Oxyvo.Green
+    else -> Oxyvo.Warn
 }
 
 @Composable
@@ -200,14 +287,4 @@ private fun PowerIcon(color: Color) {
             cap = StrokeCap.Round,
         )
     }
-}
-
-fun scanText(p: Profile): String =
-    if (p.real < 0) "Сканер: не прошёл"
-    else "Сканер: ${p.real} мс · YouTube ${if (p.yt) "✓" else "✗"} · Telegram ${if (p.tg) "✓" else "✗"}"
-
-fun scanColor(p: Profile): Color = when {
-    p.real < 0 -> Oxyvo.Bad
-    p.yt && p.tg -> Oxyvo.Green
-    else -> Oxyvo.Warn
 }

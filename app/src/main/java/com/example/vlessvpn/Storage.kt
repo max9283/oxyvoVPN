@@ -32,6 +32,14 @@ class Storage(ctx: Context) {
         get() = sp.getBoolean("terms_accepted", false)
         set(v) = sp.edit().putBoolean("terms_accepted", v).apply()
 
+    var totalRx: Long
+        get() = sp.getLong("total_rx", 0L)
+        set(v) = sp.edit().putLong("total_rx", v).apply()
+
+    var totalTx: Long
+        get() = sp.getLong("total_tx", 0L)
+        set(v) = sp.edit().putLong("total_tx", v).apply()
+
     var autoLoaded: Boolean
         get() = sp.getBoolean("auto_loaded", false)
         set(v) = sp.edit().putBoolean("auto_loaded", v).apply()

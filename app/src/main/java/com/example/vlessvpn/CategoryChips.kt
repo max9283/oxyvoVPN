@@ -1,10 +1,9 @@
 package com.example.vlessvpn
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -14,18 +13,13 @@ import androidx.compose.ui.unit.dp
 fun CategoryChips(vm: MainViewModel, modifier: Modifier = Modifier) {
     val wl = vm.profiles.count { it.cat == Defaults.CAT_WL }
     val bl = vm.profiles.count { it.cat == Defaults.CAT_BL }
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        FilterChip(selected = vm.catFilter == 0, onClick = { vm.chooseCat(0) }, label = { Text("Все") })
-        FilterChip(
-            selected = vm.catFilter == Defaults.CAT_WL,
-            onClick = { vm.chooseCat(Defaults.CAT_WL) },
-            label = { Text("Против Б.С. ($wl)") },
-        )
-        FilterChip(
-            selected = vm.catFilter == Defaults.CAT_BL,
-            onClick = { vm.chooseCat(Defaults.CAT_BL) },
-            label = { Text("Против Ч.С. ($bl)") },
-        )
+    Row(
+        modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        GlassChip("Все", vm.catFilter == 0) { vm.chooseCat(0) }
+        GlassChip("Против Б.С. ($wl)", vm.catFilter == Defaults.CAT_WL) { vm.chooseCat(Defaults.CAT_WL) }
+        GlassChip("Против Ч.С. ($bl)", vm.catFilter == Defaults.CAT_BL) { vm.chooseCat(Defaults.CAT_BL) }
     }
 }
 

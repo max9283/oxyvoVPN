@@ -1,8 +1,10 @@
 package com.example.vlessvpn
 
 import android.app.Application
+import android.net.TrafficStats
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
@@ -11,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -29,13 +32,84 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     var splitApps by mutableStateOf(storage.splitApps); private set
     var apps by mutableStateOf<List<AppInfo>>(emptyList()); private set
 
+    // Трафик (по данным системы для процесса приложения — это обмен с VPN-сервером)
+    var sessionRx by mutableLongStateOf(0L); private set
+    var sessionTx by mutableLongStateOf(0L); private set
+    var speedRx by mutableLongStateOf(0L); private set
+    var speedTx by mutableLongStateOf(0L); private set
+    var totalRx by mutableLongStateOf(storage.totalRx); private set
+    var totalTx by mutableLongStateOf(storage.totalTx); private set
+    private var baseRx = -1L
+    private var baseTx = 0L
+    private var lastRx = 0L
+    private var lastTx = 0L
+    private var saveTick = 0
+
     init {
         viewModelScope.launch {
             apps = withContext(Dispatchers.IO) {
                 try { Apps.load(getApplication()) } catch (e: Exception) { emptyList() }
             }
         }
+        startMonitor()
         if (accepted && !storage.autoLoaded) autoSetup()
+    }
+
+    private fun startMonitor() {
+        viewModelScope.launch {
+            while (true) {
+                delay(1000)
+                tick()
+            }
+        }
+    }
+
+    private fun tick() {
+        val connected = VpnState.status.value == VpnStatus.CONNECTED
+        val uid = android.os.Process.myUid()
+        val rx = TrafficStats.getUidRxBytes(uid)
+        val tx = TrafficStats.getUidTxBytes(uid)
+        if (!connected || rx < 0 || tx < 0) {
+            if (baseRx >= 0) {
+                storage.totalRx = totalRx
+                storage.totalTx = totalTx
+                baseRx = -1
+            }
+            speedRx = 0
+            speedTx = 0
+            return
+        }
+        if (baseRx < 0) {
+            baseRx = rx
+            baseTx = tx
+            lastRx = rx
+            lastTx = tx
+        }
+        val dRx = (rx - lastRx).coerceAtLeast(0)
+        val dTx = (tx - lastTx).coerceAtLeast(0)
+        lastRx = rx
+        lastTx = tx
+        sessionRx = (rx - baseRx).coerceAtLeast(0)
+        sessionTx = (tx - baseTx).coerceAtLeast(0)
+        speedRx = dRx
+        speedTx = dTx
+        totalRx += dRx
+        totalTx += dTx
+        saveTick++
+        if (saveTick % 10 == 0) {
+            storage.totalRx = totalRx
+            storage.totalTx = totalTx
+        }
+    }
+
+    fun resetTraffic() {
+        totalRx = 0
+        totalTx = 0
+        sessionRx = 0
+        sessionTx = 0
+        storage.totalRx = 0
+        storage.totalTx = 0
+        baseRx = -1
     }
 
     fun acceptTerms() {
