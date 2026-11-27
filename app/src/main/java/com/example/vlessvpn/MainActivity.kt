@@ -11,6 +11,13 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -102,10 +109,20 @@ private fun AppRoot(
     GlassBackground {
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
-                when (tab) {
-                    0 -> HomeScreen(vm, onAuto, onConnect, onDisconnect)
-                    1 -> ServersScreen(vm)
-                    else -> SplitScreen(vm)
+                AnimatedContent(
+                    targetState = tab,
+                    transitionSpec = {
+                        val dir = if (targetState > initialState) 1 else -1
+                        (fadeIn(tween(280)) + slideInHorizontally(tween(320)) { it / 8 * dir }) togetherWith
+                            (fadeOut(tween(160)) + slideOutHorizontally(tween(260)) { -it / 8 * dir })
+                    },
+                    label = "tabs",
+                ) { t ->
+                    when (t) {
+                        0 -> HomeScreen(vm, onAuto, onConnect, onDisconnect)
+                        1 -> ServersScreen(vm)
+                        else -> SplitScreen(vm)
+                    }
                 }
             }
             GlassBottomBar(tab) { tab = it }

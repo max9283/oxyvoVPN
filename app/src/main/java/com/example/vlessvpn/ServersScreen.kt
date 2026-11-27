@@ -1,6 +1,7 @@
 package com.example.vlessvpn
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -101,9 +102,11 @@ fun ServersScreen(vm: MainViewModel) {
         }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (vm.busy) {
-                    LinearProgressIndicator(Modifier.fillMaxWidth(), color = Oxyvo.Green)
-                    Text(vm.progress ?: "Подождите…", style = MaterialTheme.typography.bodySmall, color = Oxyvo.Muted)
+                AnimatedVisibility(visible = vm.busy) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth(), color = Oxyvo.Green)
+                        Text(vm.progress ?: "Подождите…", style = MaterialTheme.typography.bodySmall, color = Oxyvo.Muted)
+                    }
                 }
                 vm.message?.let {
                     Text(it, style = MaterialTheme.typography.bodySmall, color = Oxyvo.Muted)
@@ -153,15 +156,9 @@ fun ServersScreen(vm: MainViewModel) {
                 )
             }
         }
-        items(visible) { (i, p) ->
+        items(visible, key = { it.first }) { (i, p) ->
             val sel = i == vm.selected
-            Row(
-                Modifier.fillMaxWidth()
-                    .glass(RoundedCornerShape(16.dp), selected = sel)
-                    .clickable { vm.select(i) }
-                    .padding(horizontal = 6.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            GlassRow(sel, { vm.select(i) }, Modifier.fillMaxWidth().animateItem()) {
                 RadioButton(
                     selected = sel,
                     onClick = { vm.select(i) },

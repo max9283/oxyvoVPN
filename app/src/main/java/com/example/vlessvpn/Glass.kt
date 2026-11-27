@@ -1,5 +1,15 @@
 package com.example.vlessvpn
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -80,7 +90,7 @@ fun GlassBackground(content: @Composable () -> Unit) {
     }
 }
 
-/** Кнопка: одна строка текста, без переносов. */
+/** Кнопка: одна строка текста, плавное нажатие и плавная смена вида. */
 @Composable
 fun GlassButton(
     text: String,
@@ -90,21 +100,28 @@ fun GlassButton(
     primary: Boolean = false,
 ) {
     val shape = RoundedCornerShape(16.dp)
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.95f else 1f, spring(dampingRatio = 0.6f, stiffness = 500f), label = "press")
+    val a by animateFloatAsState(if (primary) 1f else 0f, tween(250), label = "prim")
+    val textColor by animateColorAsState(if (primary) Color.White else Oxyvo.Green, tween(250), label = "btnText")
     Box(
         modifier
             .height(48.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .alpha(if (enabled) 1f else 0.4f)
-            .glass(shape, selected = primary)
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 14.dp),
+            .glass(shape)
+            .clickable(interactionSource = source, indication = null, enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
+        Box(Modifier.matchParentSize().alpha(a).background(Glass.FillSelected, shape).border(1.dp, Glass.BorderSelected, shape))
         Text(
             text,
+            modifier = Modifier.padding(horizontal = 14.dp),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
-            color = if (primary) Color.White else Oxyvo.Green,
+            color = textColor,
             fontWeight = FontWeight.SemiBold,
             fontSize = 14.sp,
         )
@@ -115,17 +132,47 @@ fun GlassButton(
 @Composable
 fun GlassChip(text: String, selected: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(50)
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.94f else 1f, spring(dampingRatio = 0.6f, stiffness = 500f), label = "chipPress")
+    val a by animateFloatAsState(if (selected) 1f else 0f, tween(250), label = "chipSel")
+    val textColor by animateColorAsState(if (selected) Color.White else Oxyvo.Muted, tween(250), label = "chipText")
     Box(
-        Modifier.glass(shape, selected).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 9.dp),
+        Modifier
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .glass(shape)
+            .clickable(interactionSource = source, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
+        Box(Modifier.matchParentSize().alpha(a).background(Glass.FillSelected, shape).border(1.dp, Glass.BorderSelected, shape))
         Text(
             text,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
             maxLines = 1,
             softWrap = false,
-            color = if (selected) Color.White else Oxyvo.Muted,
+            color = textColor,
             fontSize = 13.sp,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+/** Строка списка: выбор подсвечивается плавно. */
+@Composable
+fun GlassRow(
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(16.dp),
+    content: @Composable RowScope.() -> Unit,
+) {
+    val a by animateFloatAsState(if (selected) 1f else 0f, tween(250), label = "rowSel")
+    Box(modifier.glass(shape).clickable(onClick = onClick)) {
+        Box(Modifier.matchParentSize().alpha(a).background(Glass.FillSelected, shape).border(1.dp, Glass.BorderSelected, shape))
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            content = content,
         )
     }
 }
@@ -191,24 +238,25 @@ fun GlassBottomBar(selected: Int, onSelect: (Int) -> Unit) {
         titles.forEachIndexed { i, title ->
             val sel = i == selected
             val shape = RoundedCornerShape(22.dp)
-            val color = if (sel) Color.White else Oxyvo.Muted
-            Column(
-                Modifier.weight(1f)
-                    .then(if (sel) Modifier.glass(shape, selected = true) else Modifier.clip(shape))
-                    .clickable { onSelect(i) }
-                    .padding(vertical = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                NavIcon(i, color)
-                Text(
-                    title,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                    fontSize = 11.sp,
-                    color = color,
-                    fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal,
-                )
+            val a by animateFloatAsState(if (sel) 1f else 0f, tween(300), label = "navSel")
+            val color by animateColorAsState(if (sel) Color.White else Oxyvo.Muted, tween(300), label = "navColor")
+            Box(Modifier.weight(1f).clip(shape).clickable { onSelect(i) }) {
+                Box(Modifier.matchParentSize().alpha(a).background(Glass.FillSelected, shape).border(1.dp, Glass.BorderSelected, shape))
+                Column(
+                    Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    NavIcon(i, color)
+                    Text(
+                        title,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                        fontSize = 11.sp,
+                        color = color,
+                        fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                }
             }
         }
     }

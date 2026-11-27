@@ -116,12 +116,11 @@ fun SplitScreen(vm: MainViewModel) {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(list, key = { it.pkg }) { app ->
                     val checked = app.pkg in selectedApps
-                    Row(
-                        Modifier.fillMaxWidth()
-                            .glass(RoundedCornerShape(14.dp), selected = checked)
-                            .clickable { vm.toggleApp(app.pkg) }
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                    GlassRow(
+                        checked,
+                        { vm.toggleApp(app.pkg) },
+                        Modifier.fillMaxWidth().animateItem(),
+                        RoundedCornerShape(14.dp),
                     ) {
                         Image(app.icon, null, Modifier.size(38.dp))
                         Text(

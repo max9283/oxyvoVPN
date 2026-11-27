@@ -40,6 +40,11 @@ class Storage(ctx: Context) {
         get() = sp.getLong("total_tx", 0L)
         set(v) = sp.edit().putLong("total_tx", v).apply()
 
+    /** Последний удачно скачанный sources.json (на случай, если GitHub недоступен). */
+    var remoteSources: String
+        get() = sp.getString("remote_sources", "") ?: ""
+        set(v) = sp.edit().putString("remote_sources", v).apply()
+
     var autoLoaded: Boolean
         get() = sp.getBoolean("auto_loaded", false)
         set(v) = sp.edit().putBoolean("auto_loaded", v).apply()

@@ -15,6 +15,8 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -138,16 +140,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Загружает все источники, проверяет пингом и оставляет лучшие серверы каждой категории. */
     private suspend fun loadServers(viaYandex: Boolean = false): Boolean {
         progress = if (viaYandex) "Загружаю серверы через Яндекс Переводчик…" else "Загружаю списки серверов…"
-        val all = Defaults.SOURCES + storage.customSubs.map { Src(it, Defaults.CAT_BL) }
+        val remote = withContext(Dispatchers.IO) { RemoteSources.load(storage) }
+        val all = (Defaults.SOURCES + remote + storage.customSubs.map { Src(it, Defaults.CAT_BL) })
+            .distinctBy { it.url }
         // Через переводчик грузим только списки для белых списков — они нужны, когда интернет глушат
         val sources = if (viaYandex) all.filter { it.cat == Defaults.CAT_WL } else all
         val fetched = withContext(Dispatchers.IO) {
             coroutineScope {
+                val gate = Semaphore(12)
                 sources.map { s ->
                     async {
-                        runCatching {
-                            Subscription.fetchWithFallback(s, viaYandex).map { it.copy(cat = s.cat, auto = true) }
-                        }.getOrDefault(emptyList())
+                        gate.withPermit {
+                            runCatching {
+                                Subscription.fetchWithFallback(s, viaYandex).map { it.copy(cat = s.cat, auto = true) }
+                            }.getOrDefault(emptyList())
+                        }
                     }
                 }.awaitAll().flatten()
             }

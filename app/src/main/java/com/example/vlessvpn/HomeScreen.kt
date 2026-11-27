@@ -1,5 +1,16 @@
 package com.example.vlessvpn
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -71,23 +82,37 @@ fun HomeScreen(
         Spacer(Modifier.height(20.dp))
 
         // Главная кнопка: автоподключение к самому быстрому серверу
+        val on = active || searching
+        val c1 by animateColorAsState(if (on) Color(0xFF3DF28B) else Color(0x33FFFFFF), tween(500), label = "c1")
+        val c2 by animateColorAsState(if (on) Color(0xFF00843B) else Color(0x0DFFFFFF), tween(500), label = "c2")
+        val iconColor by animateColorAsState(if (on) Color(0xFF00210E) else Oxyvo.Green, tween(500), label = "icon")
+        val pulse = rememberInfiniteTransition(label = "pulse")
+        val pulseScale by pulse.animateFloat(
+            initialValue = 1f,
+            targetValue = 1.07f,
+            animationSpec = infiniteRepeatable(tween(1100, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "pulseScale",
+        )
+        val ringScale = if (connecting || searching) pulseScale else 1f
+        val btnScale by animateFloatAsState(if (connected) 1.03f else 1f, spring(), label = "btnScale")
         Box(
-            Modifier.size(210.dp).border(1.dp, Color.White.copy(alpha = 0.10f), CircleShape),
+            Modifier
+                .size(210.dp)
+                .graphicsLayer { scaleX = ringScale; scaleY = ringScale }
+                .border(1.dp, Color.White.copy(alpha = 0.10f), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            val on = active || searching
-            val colors = if (on) listOf(Color(0xFF3DF28B), Color(0xFF00843B))
-            else listOf(Color(0x33FFFFFF), Color(0x0DFFFFFF))
             Box(
                 Modifier
                     .size(176.dp)
+                    .graphicsLayer { scaleX = btnScale; scaleY = btnScale }
                     .clip(CircleShape)
-                    .background(Brush.radialGradient(colors))
+                    .background(Brush.radialGradient(listOf(c1, c2)))
                     .border(2.dp, Glass.Border, CircleShape)
                     .clickable(enabled = !searching) { if (active) onDisconnect() else onAuto() },
                 contentAlignment = Alignment.Center,
             ) {
-                PowerIcon(if (on) Color(0xFF00210E) else Oxyvo.Green)
+                PowerIcon(iconColor)
             }
             if (connecting || searching) {
                 CircularProgressIndicator(Modifier.size(204.dp), color = Oxyvo.Green, strokeWidth = 4.dp)
@@ -102,7 +127,8 @@ fun HomeScreen(
             status == VpnStatus.ERROR -> "Ошибка" to Oxyvo.Bad
             else -> "Отключено" to Oxyvo.Muted
         }
-        Text(title, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = color, maxLines = 1)
+        val titleColor by animateColorAsState(color, tween(400), label = "titleColor")
+        Text(title, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = titleColor, maxLines = 1)
         val sub = when {
             searching -> vm.progress
             status == VpnStatus.ERROR -> error ?: "неизвестная ошибка"
@@ -132,7 +158,7 @@ fun HomeScreen(
 
         // Текущий сервер
         Row(
-            Modifier.fillMaxWidth().glass().padding(16.dp),
+            Modifier.fillMaxWidth().glass().animateContentSize().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
@@ -189,7 +215,7 @@ fun HomeScreen(
 
 @Composable
 private fun TrafficCard(vm: MainViewModel, connected: Boolean) {
-    Column(Modifier.fillMaxWidth().glass().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxWidth().glass().animateContentSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "Расход трафика",
